@@ -43,12 +43,27 @@ float gasA[6] = {605.18, 77.255, 110.47, 44.947, 102.2, 34.668};
 float gasB[6] = {-3.937, -3.18, -2.862, -3.445, -2.473};
 int itemcheck = 2;
 
+int MQ135Pin=A1;
+int Rload = 20000;
+float rO=66000;
+double ppm=414.38;
+float a = 110.7432567;
+float b = -2.856935538;
+float minppm=0;
+float maxppm=0;
+const long MAX_VALUES_NUM = 10;
+AverageValue<long> averageValue(MAX_VALUES_NUM);
+
 void setup() {
   dht.begin();
   lcd.begin (); //LCD untuk ukuran 16x2
   lcd.backlight();
+  pinMode(MQ135Pin, INPUT);
   Serial.begin(9600);
  
+   minppm=pow((1000/110.7432567),1/-2.856935538);
+      //max[Rs/Ro]=(min[ppm]/a)^(1/b)
+   maxppm=pow((10/110.7432567),1/-2.856935538);
   
   lcd.setCursor(0, 0); //baris pertama
   lcd.print("Connecting...");
@@ -168,15 +183,25 @@ void loop() {
   Serial.print(F("°C "));
    // Update data, the arduino will be read the voltage on the analog pin
    // Configure the equation to calculate CO2 concentration value
-  MQ135.setA(gasA[itemcheck]); MQ135.setB(gasB[itemcheck]);
-  float as = MQ135.readSensor();
-  float c = (as * 1000)-250; //treshhold alat manual: 895 //thersehold sensor: 1070.00
-  Serial.print(jenisgas[itemcheck]);Serial.print(" : ");Serial.print(c);Serial.println(" PPM");
+  // MQ135.setA(gasA[itemcheck]); MQ135.setB(gasB[itemcheck]);
+  // float as = MQ135.readSensor();
+  // float c = (as * 1000)-250; //treshhold alat manual: 895 //thersehold sensor: 1070.00
+  // Serial.print(jenisgas[itemcheck]);Serial.print(" : ");Serial.print(c);Serial.println(" PPM");
   
-  MQ135.setA(102.2); MQ135.setB(-2.473);
-  float a = MQ135.readSensor();
-  float d = (a * 1000)-250;
-  Serial.print(jenisgas[1]);Serial.print(" : ");Serial.print(d);Serial.println(" PPM");
+  // MQ135.setA(102.2); MQ135.setB(-2.473);
+  // float a = MQ135.readSensor();
+  // float d = (a * 1000)-250;
+  // Serial.print(jenisgas[1]);Serial.print(" : ");Serial.print(d);Serial.println(" PPM");
+
+  int adcRaw = analogRead(MQ135Pin);
+  double rS = ((1024.0 * Rload) / adcRaw) - Rload;
+   
+  float rSrO= rS/rO;
+
+  float ppm = a * pow((float)rS / (float)rO, b);
+  averageValue.push(ppm);
+
+  
   // MQ135.setA(102.2); MQ135.setB(-2.473); // Configure the equation to calculate NH4 concentration value
   // float NH4 = MQ135.readSensor();
   // float n = NH4 * 1000;
@@ -201,14 +226,8 @@ void loop() {
   lcd.setCursor(0, 0); //baris pertama
   lcd.print("CO2:");
   lcd.setCursor(5, 0); //baris pertama
-  lcd.print(c);
+  lcd.print(averageValue.average());
   lcd.setCursor(13, 0); //baris pertama
-  lcd.print("ppm");
-  lcd.setCursor(0, 1); //baris pertama
-  lcd.print("NH4:");
-  lcd.setCursor(5, 1); //baris pertama
-  lcd.print(d);
-  lcd.setCursor(13, 1); //baris pertama
   lcd.print("ppm");
   delay(2000);
   // lcd.clear();
@@ -223,7 +242,7 @@ void loop() {
   String hum = "&hum=";
   hum =+ h;
   String co2 = "&co2=";
-  co2 =+ c;
+  co2 =+ averageValue.average();
   String nh4 = "&nh4=";
   nh4 =+ d;
   String url = "http://eennos.online/post-data.php?id=" + id + "&suhu=" + suhu + "&hum=" + hum +"&co2=" + co2;
